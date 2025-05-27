@@ -11,8 +11,3 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 ////
-= TEA Generator Maven Plugin
-
-The purpose of the TEA Generator Maven Plugin will be to convert the metadata available in the Maven ecosystem into a
-https://github.com/CycloneDX/transparency-exchange-api[Transparency Exchange API]
-site.

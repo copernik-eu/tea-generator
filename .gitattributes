@@ -1,0 +1,4 @@
+# Every text file should use LF
+* text=auto eol=lf
+# Windows batch should use CRLF
+mvnw.cmd text eol=crlf
