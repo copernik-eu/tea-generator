@@ -1,8 +1,22 @@
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package eu.copernik.tea.internal;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.databind.json.JsonMapper;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.github.packageurl.PackageURL;
 import eu.copernik.tea.TeaRepositoryManager;
 import eu.copernik.tea.model.Collection;
@@ -11,10 +25,14 @@ import eu.copernik.tea.model.Identifier;
 import eu.copernik.tea.model.IdentifierType;
 import eu.copernik.tea.model.Product;
 import eu.copernik.tea.model.Release;
+import jakarta.validation.ConstraintViolation;
+import jakarta.validation.Validator;
+import jakarta.validation.ValidatorFactory;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Iterator;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Stream;
 import org.jspecify.annotations.NullMarked;
@@ -23,8 +41,10 @@ import org.jspecify.annotations.Nullable;
 @NullMarked
 public class DefaultTeaRepositoryManager implements TeaRepositoryManager {
 
-    private final ObjectMapper objectMapper =
-            JsonMapper.builder().enable(SerializationFeature.INDENT_OUTPUT).build();
+    private final ObjectMapper objectMapper = JsonMapper.builder()
+            .addModule(new JavaTimeModule())
+            .enable(SerializationFeature.INDENT_OUTPUT)
+            .build();
 
     private final Path basePath;
 
@@ -165,6 +185,7 @@ public class DefaultTeaRepositoryManager implements TeaRepositoryManager {
 
     private void saveModel(Object object, Path folder, String fileName) throws IOException {
         try {
+            validateModel(object);
             Path filePath = folder.resolve(fileName + ".json");
             objectMapper.writeValue(filePath.toFile(), object);
         } catch (IOException e) {
@@ -177,7 +198,7 @@ public class DefaultTeaRepositoryManager implements TeaRepositoryManager {
     private <T> T loadModel(Class<T> type, Path folder, String fileName) throws IOException {
         try {
             Path filePath = folder.resolve(fileName + ".json");
-            return objectMapper.readValue(filePath.toFile(), type);
+            return validateModel(objectMapper.readValue(filePath.toFile(), type));
         } catch (IOException e) {
             throw e;
         } catch (Exception e) {
@@ -185,7 +206,24 @@ public class DefaultTeaRepositoryManager implements TeaRepositoryManager {
         }
     }
 
+    private <T> T validateModel(T object) {
+        try (ValidatorFactory factory = jakarta.validation.Validation.buildDefaultValidatorFactory()) {
+            Validator validator = factory.getValidator();
+            Set<ConstraintViolation<T>> violations = validator.validate(object);
+            if (!violations.isEmpty()) {
+                StringBuilder sb = new StringBuilder("Validation error:\n");
+                violations.forEach(v -> sb.append(v.getPropertyPath())
+                        .append(": ")
+                        .append(v.getMessage())
+                        .append("\n"));
+                throw new IllegalArgumentException(sb.toString());
+            }
+        }
+        return object;
+    }
+
     private String stripExtension(Path path) {
-        return path.getFileName().toString().replaceAll(".json$", "");
+        Path fileName = path.getFileName();
+        return (fileName != null ? fileName : path).toString().replaceAll(".json$", "");
     }
 }

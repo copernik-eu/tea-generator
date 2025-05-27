@@ -11,23 +11,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package eu.copernik.tea.internal;
+package eu.copernik.tea.maven;
 
-import eu.copernik.tea.TeaRepository;
 import eu.copernik.tea.TeaRepositoryManagerFactory;
-import java.util.Objects;
-import javax.inject.Named;
-import javax.inject.Singleton;
+import org.apache.maven.plugin.AbstractMojo;
 
-@Named
-@Singleton
-public class DefaultTeaRepositoryManagerFactory implements TeaRepositoryManagerFactory {
+public abstract class AbstractTeaMojo extends AbstractMojo {
 
-    public static final TeaRepositoryManagerFactory INSTANCE = new DefaultTeaRepositoryManagerFactory();
+    private final TeaRepositoryManagerFactory teaRepositoryManagerFactory;
 
-    @Override
-    public DefaultTeaRepositoryManager newInstance(TeaRepository repository) {
-        Objects.requireNonNull(repository, "Repository cannot be null");
-        return new DefaultTeaRepositoryManager(repository.getBasePath());
+    protected AbstractTeaMojo(TeaRepositoryManagerFactory teaRepositoryManagerFactory) {
+        this.teaRepositoryManagerFactory = teaRepositoryManagerFactory;
     }
 }

@@ -56,6 +56,7 @@
 
   <modules>
     <module>core</module>
+    <module>maven-plugin</module>
   </modules>
 
   <scm child.scm.connection.inherit.append.path="false" child.scm.developerConnection.inherit.append.path="false" child.scm.url.inherit.append.path="false">
@@ -506,6 +507,7 @@
               <!-- Files which should be considered binary -->
               <excludes>
                 <exclude>.java-version</exclude>
+                <exclude>**/*.mustache</exclude>
               </excludes>
             </configuration>
           </execution>
@@ -870,7 +872,7 @@
                   <goal>baseline</goal>
                 </goals>
                 <configuration>
-                  <failOnMissing>true</failOnMissing>
+                  <failOnMissing>false</failOnMissing>
                   <includeDistributionManagement>false</includeDistributionManagement>
                 </configuration>
               </execution>
