@@ -16,7 +16,7 @@
 package eu.copernik.tea.internal;
 
 import eu.copernik.tea.TeaRepository;
-import eu.copernik.tea.TeaRepositoryManagerFactory;
+import eu.copernik.tea.spi.TeaRepositoryManagerFactory;
 import java.util.Objects;
 import javax.inject.Named;
 import javax.inject.Singleton;

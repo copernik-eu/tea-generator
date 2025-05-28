@@ -13,8 +13,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package eu.copernik.tea;
+package eu.copernik.tea.spi;
 
+import eu.copernik.tea.TeaRepository;
+import eu.copernik.tea.TeaRepositoryManager;
 import eu.copernik.tea.internal.DefaultTeaRepositoryManagerFactory;
 
 public interface TeaRepositoryManagerFactory {

@@ -29,7 +29,7 @@ import org.jspecify.annotations.Nullable;
 public interface TeaRepositoryManager {
 
     @Nullable
-    Product getProductById(UUID id) throws IOException;
+    Product getProduct(UUID id) throws IOException;
 
     void saveProduct(Product product) throws IOException;
 
@@ -37,15 +37,15 @@ public interface TeaRepositoryManager {
 
     void saveComponent(Component component) throws IOException;
 
-    Release getOrCreateReleaseByVersion(Component component, String version) throws IOException;
+    Release getOrCreateRelease(Component component, String version) throws IOException;
 
     void saveRelease(Component component, Release release) throws IOException;
 
     @Nullable
-    Collection getCollectionByReleaseAndVersion(Release release, int version) throws IOException;
+    Collection getCollection(Release release, int version) throws IOException;
 
     @Nullable
-    Collection getLatestCollectionByRelease(Release release) throws IOException;
+    Collection getLatestCollection(Release release) throws IOException;
 
     void saveCollection(Collection collection) throws IOException;
 }

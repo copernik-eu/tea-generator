@@ -18,18 +18,24 @@ package eu.copernik.tea.internal;
 import static java.time.ZoneOffset.UTC;
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.github.packageurl.PackageURL;
 import eu.copernik.tea.model.Collection;
 import eu.copernik.tea.model.Component;
+import eu.copernik.tea.model.Identifier;
 import eu.copernik.tea.model.IdentifierType;
 import eu.copernik.tea.model.Product;
 import eu.copernik.tea.model.Release;
 import java.nio.file.Path;
 import java.time.OffsetDateTime;
+import java.util.List;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 class DefaultTeaRepositoryManagerTest {
 
@@ -44,23 +50,47 @@ class DefaultTeaRepositoryManagerTest {
     }
 
     @Test
-    void testGetProductById_returnsNullForNonExistentProduct() throws Exception {
+    void getProduct_returnsNullForNonExistentProduct() throws Exception {
         UUID nonExistentId = UUID.randomUUID();
-        assertThat(manager.getProductById(nonExistentId)).isNull();
+        assertThat(manager.getProduct(nonExistentId)).isNull();
     }
 
     @Test
-    void testGetProductById_findsExistingProject() throws Exception {
+    void getProduct_findsExistingProject() throws Exception {
         UUID existentId = UUID.randomUUID();
         Product product = new Product().uuid(existentId).name("Test Product");
         manager.saveProduct(product);
 
-        Product foundProduct = manager.getProductById(existentId);
+        Product foundProduct = manager.getProduct(existentId);
         assertThat(foundProduct).isNotNull().isEqualTo(product);
     }
 
     @Test
-    void testGetOrCreateComponentByPurl_createsAndFindsComponent() throws Exception {
+    void saveProduct_savesAndRetrievesProduct() throws Exception {
+        Product product = new Product().uuid(UUID.randomUUID()).name("Test Product");
+        manager.saveProduct(product);
+
+        Product retrieved = manager.getProduct(product.getUuid());
+        assertThat(retrieved).isNotNull();
+        assertThat(retrieved.getName()).isEqualTo("Test Product");
+
+        Path productsFile = tempDir.resolve("products.json");
+        ProductPaginationDetails products = manager.loadModelOrThrow(ProductPaginationDetails.class, productsFile);
+        assertThat(products.getResults()).isNotEmpty().containsExactly(product);
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    void getOrCreateComponentByPurl_createsAndFindsComponent(boolean hasOtherComponents) throws Exception {
+        if (hasOtherComponents) {
+            // Create a dummy component to ensure the manager has some data
+            PackageURL dummyPurl = new PackageURL("pkg:maven/org.example/dummy@1.0.0");
+            Component dummyComponent = manager.getOrCreateComponentByPurl(dummyPurl);
+            dummyComponent.name("Dummy Component");
+            dummyComponent.addIdentifiersItem(
+                    new Identifier().idType(IdentifierType.CPE).idValue("cpe:/a:example:dummy"));
+            manager.saveComponent(dummyComponent);
+        }
         PackageURL purl = new PackageURL("pkg:maven/org.example/foo@1.0.0");
         Component created = manager.getOrCreateComponentByPurl(purl);
         assertThat(created).isNotNull();
@@ -77,86 +107,111 @@ class DefaultTeaRepositoryManagerTest {
     }
 
     @Test
-    void testFindComponentByPurl_returnsNullForNonExistentPurl() throws Exception {
+    void findComponentByPurl_returnsNullForNonExistentPurl() throws Exception {
         PackageURL purl = new PackageURL("pkg:maven/org.example/nonexistent@1.0.0");
         assertThat(manager.getOrCreateComponentByPurl(purl)).isNotNull();
     }
 
-    @Test
-    void testGetOrCreateReleaseByVersion_createsAndFindsRelease() throws Exception {
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    void getOrCreateRelease_createsAndFindsRelease(boolean create) throws Exception {
         PackageURL purl = new PackageURL("pkg:maven/org.example/bar@2.0.0");
         Component component = manager.getOrCreateComponentByPurl(purl);
         // Add required fields to the component
         component.name("Test Component Bar");
         manager.saveComponent(component);
 
-        Release created = manager.getOrCreateReleaseByVersion(component, "2.0.0");
-        assertThat(created).isNotNull();
-        assertThat(created.getVersion()).isEqualTo("2.0.0");
-        // Add required fields to the release
-        created.releaseDate(OffsetDateTime.now(UTC));
-        manager.saveRelease(component, created);
+        if (create) {
+            Release found = manager.getOrCreateRelease(component, "2.0.0");
+            assertThat(found).isNotNull();
+            assertThat(found.getUuid()).isNotNull();
+        } else {
+            Release created = manager.getOrCreateRelease(component, "2.0.0");
+            assertThat(created).isNotNull();
+            assertThat(created.getVersion()).isEqualTo("2.0.0");
+            // Add required fields to the release
+            created.releaseDate(OffsetDateTime.now(UTC));
+            manager.saveRelease(component, created);
 
-        Release found = manager.getOrCreateReleaseByVersion(component, "2.0.0");
-        assertThat(found.getUuid()).isEqualTo(created.getUuid());
+            Release found = manager.getOrCreateRelease(component, "2.0.0");
+            assertThat(found.getUuid()).isEqualTo(created.getUuid());
+        }
     }
 
     @Test
-    void testFindReleaseByVersion_returnsNullForNonExistentVersion() throws Exception {
-        PackageURL purl = new PackageURL("pkg:maven/org.example/nonexistent@2.0.0");
-        Component component = manager.getOrCreateComponentByPurl(purl);
-        // Add required fields to the component
-        component.name("Test Component Nonexistent");
-        manager.saveComponent(component);
-
-        Release found = manager.getOrCreateReleaseByVersion(component, "2.0.0");
-        assertThat(found).isNotNull();
-        assertThat(found.getVersion()).isEqualTo("2.0.0");
-    }
-
-    @Test
-    void testSaveAndGetCollectionByReleaseAndVersion() throws Exception {
-        PackageURL purl = new PackageURL("pkg:maven/org.example/baz@3.0.0");
+    void saveRelease_savesAndRetrievesRelease() throws Exception {
+        PackageURL purl = new PackageURL("pkg:maven/org.example/baz");
         Component component = manager.getOrCreateComponentByPurl(purl);
         // Add required fields to the component
         component.name("Test Component Baz");
         manager.saveComponent(component);
-        Release release = manager.getOrCreateReleaseByVersion(component, "3.0.0");
-        // Add required fields to the release
-        release.releaseDate(OffsetDateTime.now(UTC));
+
+        Release release = new Release().uuid(UUID.randomUUID()).version("3.0.0").releaseDate(OffsetDateTime.now(UTC));
         manager.saveRelease(component, release);
 
-        Collection collection = new Collection();
-        collection.setUuid(release.getUuid());
-        collection.setVersion(1);
-        manager.saveCollection(collection);
+        Release retrieved = manager.getOrCreateRelease(component, "3.0.0");
+        assertThat(retrieved).isNotNull();
+        assertThat(retrieved.getVersion()).isEqualTo("3.0.0");
 
-        Collection found = manager.getCollectionByReleaseAndVersion(release, 1);
-        assertThat(found).isNotNull();
-        assertThat(found.getVersion()).isEqualTo(1);
+        // Retrieve all releases for the component
+        Path releasesFile = tempDir.resolve("component/" + component.getUuid() + "/releases.json");
+        List<Release> releases = manager.loadModelList(new TypeReference<>() {}, releasesFile);
+        assertThat(releases).isNotEmpty().containsExactly(release);
     }
 
     @Test
-    void testGetLatestCollectionByRelease_returnsLatest() throws Exception {
-        PackageURL purl = new PackageURL("pkg:maven/org.example/qux@4.0.0");
+    void getLatestCollectionByRelease_returnsLatest() throws Exception {
+        PackageURL purl = new PackageURL("pkg:maven/org.example/qux");
         Component component = manager.getOrCreateComponentByPurl(purl);
         // Add required fields to the component
         component.name("Test Component Qux");
         manager.saveComponent(component);
-        Release release = manager.getOrCreateReleaseByVersion(component, "4.0.0");
+        Release release = manager.getOrCreateRelease(component, "4.0.0");
         // Add required fields to the release
         release.releaseDate(OffsetDateTime.now(UTC));
         manager.saveRelease(component, release);
 
-        for (int i = 1; i <= 3; i++) {
-            Collection collection = new Collection();
+        // Test with no collections
+        @Nullable Collection latestCollection = manager.getLatestCollection(release);
+        assertThat(latestCollection).isNull();
+
+        // Test with multiple collections
+        Collection collection;
+        for (int version = 1; version <= 10; version++) {
+            collection = new Collection().uuid(release.getUuid()).version(version);
             collection.setUuid(release.getUuid());
-            collection.setVersion(i);
+            collection.setVersion(version);
             manager.saveCollection(collection);
         }
 
-        Collection latest = manager.getLatestCollectionByRelease(release);
-        assertThat(latest).isNotNull();
-        assertThat(latest.getVersion()).isEqualTo(3);
+        latestCollection = manager.getLatestCollection(release);
+        assertThat(latestCollection).isNotNull();
+        assertThat(latestCollection.getVersion()).isEqualTo(10);
+    }
+
+    @Test
+    void saveCollection_savesAndRetrievesCollection() throws Exception {
+        PackageURL purl = new PackageURL("pkg:maven/org.example/quux");
+        Component component = manager.getOrCreateComponentByPurl(purl);
+        // Add required fields to the component
+        component.name("Test Component Quux");
+        manager.saveComponent(component);
+        Release release = manager.getOrCreateRelease(component, "5.0.0");
+        // Add required fields to the release
+        release.releaseDate(OffsetDateTime.now(UTC));
+        manager.saveRelease(component, release);
+
+        Path collectionsFile = tempDir.resolve("release/" + release.getUuid() + "/collections.json");
+        for (int version = 1; version <= 10; version++) {
+            Collection collection = new Collection().uuid(release.getUuid()).version(version);
+            manager.saveCollection(collection);
+
+            Collection retrieved = manager.getCollection(release, version);
+            assertThat(retrieved).isNotNull().isEqualTo(collection);
+            Collection latest = manager.getLatestCollection(release);
+            assertThat(latest).isNotNull().isEqualTo(collection);
+            List<Collection> collections = manager.loadModelList(new TypeReference<>() {}, collectionsFile);
+            assertThat(collections).isNotEmpty().contains(collection);
+        }
     }
 }
